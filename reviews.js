@@ -1,10 +1,28 @@
 (function(){
+  var CLOUD_NAME = 'gwfnrs6k';
+  var UPLOAD_PRESET = 'digihallo_reviews';
+  var AVATAR_COLORS = ['#6d59ff','#f59e0b','#10b981','#ef4444','#3b82f6','#ec4899','#14b8a6','#8b5cf6'];
+
+  function colorForName(name){
+    var sum = 0;
+    for(var i=0;i<name.length;i++){ sum += name.charCodeAt(i); }
+    return AVATAR_COLORS[sum % AVATAR_COLORS.length];
+  }
+
+  function formatDate(ts){
+    if(!ts || !ts.seconds) return '';
+    var d = new Date(ts.seconds * 1000);
+    var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    return months[d.getMonth()] + ' ' + d.getDate() + ', ' + d.getFullYear();
+  }
+
   document.addEventListener('DOMContentLoaded', function(){
     document.querySelectorAll('.dh-reviews-wrap').forEach(function(wrap){
       var postId = wrap.getAttribute('data-postid');
       if(!postId || typeof dhDB === 'undefined') return;
 
       var selectedRating = 0;
+      var selectedFile = null;
       var starsInput = wrap.querySelectorAll('[data-role="dh-input-stars"] span');
       starsInput.forEach(function(st){
         st.addEventListener('click', function(){
@@ -13,6 +31,20 @@
             s2.classList.toggle('active', parseInt(s2.getAttribute('data-val')) <= selectedRating);
           });
         });
+      });
+
+      var photoInput = wrap.querySelector('[data-role="dh-rv-photo"]');
+      var photoPreview = wrap.querySelector('[data-role="dh-rv-photo-preview"]');
+      photoInput.addEventListener('change', function(){
+        if(this.files && this.files[0]){
+          selectedFile = this.files[0];
+          var reader = new FileReader();
+          reader.onload = function(e){
+            photoPreview.src = e.target.result;
+            photoPreview.style.display = 'block';
+          };
+          reader.readAsDataURL(selectedFile);
+        }
       });
 
       function renderStarsStatic(n){
@@ -29,12 +61,24 @@
         });
       }
 
+      function updateBadge(avg, count){
+        var badge = document.querySelector('.dh-rv-badge[data-postid="' + postId + '"]');
+        if(!badge) return;
+        if(count === 0){
+          badge.style.display = 'none';
+          return;
+        }
+        badge.style.display = 'flex';
+        badge.querySelector('.dh-rv-badge-text').textContent = avg.toFixed(1) + ' (' + count + ')';
+      }
+
       function loadReviews(){
         var listEl = wrap.querySelector('[data-role="dh-rv-list"]');
         dhDB.collection('reviews').where('postId','==',postId).get().then(function(snap){
           if(snap.empty){
             listEl.innerHTML = '<div class="dh-rv-empty">No reviews yet. Be the first to review this product!</div>';
             wrap.querySelector('[data-role="dh-avg-text"]').textContent = 'No reviews yet';
+            updateBadge(0, 0);
             return;
           }
           var items = [];
@@ -44,14 +88,36 @@
           var avg = total / items.length;
           wrap.querySelector('[data-role="dh-avg-stars"]').textContent = renderStarsStatic(avg);
           wrap.querySelector('[data-role="dh-avg-text"]').textContent = avg.toFixed(1) + ' out of 5 (' + items.length + ' review' + (items.length>1?'s':'') + ')';
+          updateBadge(avg, items.length);
           var html = '';
           items.forEach(function(r){
-            html += '<div class="dh-rv-item"><span class="dh-stars-static">' + renderStarsStatic(r.rating) + '</span><h5>' + escapeHtml(r.name) + '</h5><p>' + escapeHtml(r.text) + '</p></div>';
+            var initial = (r.name || '?').trim().charAt(0).toUpperCase();
+            var color = colorForName(r.name || '?');
+            var dateStr = formatDate(r.timestamp);
+            html += '<div class="dh-rv-item">';
+            html += '<div class="dh-rv-avatar" style="background:' + color + '">' + initial + '</div>';
+            html += '<div class="dh-rv-item-body">';
+            html += '<div class="dh-rv-item-top"><h5>' + escapeHtml(r.name) + '</h5><span class="dh-rv-date">' + dateStr + '</span></div>';
+            html += '<span class="dh-stars-static">' + renderStarsStatic(r.rating) + '</span>';
+            html += '<p>' + escapeHtml(r.text) + '</p>';
+            if(r.imageUrl){ html += '<img class="dh-rv-photo" src="' + r.imageUrl + '"/>'; }
+            html += '</div></div>';
           });
           listEl.innerHTML = html;
         }).catch(function(){
           listEl.innerHTML = '<div class="dh-rv-empty">Could not load reviews right now.</div>';
         });
+      }
+
+      function uploadToCloudinary(file, callback){
+        var url = 'https://api.cloudinary.com/v1_1/' + CLOUD_NAME + '/image/upload';
+        var formData = new FormData();
+        formData.append('file', file);
+        formData.append('upload_preset', UPLOAD_PRESET);
+        fetch(url, { method: 'POST', body: formData })
+          .then(function(res){ return res.json(); })
+          .then(function(data){ callback(data.secure_url || null); })
+          .catch(function(){ callback(null); });
       }
 
       var submitBtn = wrap.querySelector('[data-role="dh-rv-submit"]');
@@ -69,32 +135,56 @@
         }
         btn.disabled = true;
         btn.textContent = 'Submitting...';
-        dhDB.collection('reviews').add({
-          postId: postId,
-          name: name,
-          rating: selectedRating,
-          text: text,
-          timestamp: firebase.firestore.FieldValue.serverTimestamp()
-        }).then(function(){
-          msgEl.className = 'dh-rv-msg ok';
-          msgEl.textContent = 'Thank you! Your review has been posted.';
-          msgEl.style.display = 'block';
-          wrap.querySelector('[data-role="dh-rv-name"]').value = '';
-          wrap.querySelector('[data-role="dh-rv-text"]').value = '';
-          selectedRating = 0;
-          starsInput.forEach(function(s2){ s2.classList.remove('active'); });
-          loadReviews();
-        }).catch(function(){
-          msgEl.className = 'dh-rv-msg err';
-          msgEl.textContent = 'Something went wrong. Please try again.';
-          msgEl.style.display = 'block';
-        }).finally(function(){
-          btn.disabled = false;
-          btn.textContent = 'Submit Review';
-        });
+
+        function saveReview(imageUrl){
+          dhDB.collection('reviews').add({
+            postId: postId,
+            name: name,
+            rating: selectedRating,
+            text: text,
+            imageUrl: imageUrl || null,
+            timestamp: firebase.firestore.FieldValue.serverTimestamp()
+          }).then(function(){
+            msgEl.className = 'dh-rv-msg ok';
+            msgEl.textContent = 'Thank you! Your review has been posted.';
+            msgEl.style.display = 'block';
+            wrap.querySelector('[data-role="dh-rv-name"]').value = '';
+            wrap.querySelector('[data-role="dh-rv-text"]').value = '';
+            photoPreview.style.display = 'none';
+            photoInput.value = '';
+            selectedFile = null;
+            selectedRating = 0;
+            starsInput.forEach(function(s2){ s2.classList.remove('active'); });
+            loadReviews();
+          }).catch(function(){
+            msgEl.className = 'dh-rv-msg err';
+            msgEl.textContent = 'Something went wrong. Please try again.';
+            msgEl.style.display = 'block';
+          }).finally(function(){
+            btn.disabled = false;
+            btn.textContent = 'Submit Review';
+          });
+        }
+
+        if(selectedFile){
+          btn.textContent = 'Uploading photo...';
+          uploadToCloudinary(selectedFile, function(url){
+            btn.textContent = 'Submitting...';
+            saveReview(url);
+          });
+        } else {
+          saveReview(null);
+        }
       });
 
       loadReviews();
+    });
+
+    document.querySelectorAll('.dh-rv-badge').forEach(function(badge){
+      badge.addEventListener('click', function(){
+        var section = document.getElementById('dh-reviews-section');
+        if(section){ section.scrollIntoView({behavior:'smooth', block:'start'}); }
+      });
     });
   });
 })();
