@@ -72,6 +72,40 @@
         badge.querySelector('.dh-rv-badge-text').textContent = avg.toFixed(1) + ' (' + count + ')';
       }
 
+      var PAGE_SIZE = 5;
+      var visibleCount = PAGE_SIZE;
+      var allItems = [];
+
+      function renderList(){
+        var listEl = wrap.querySelector('[data-role="dh-rv-list"]');
+        var html = '';
+        var toShow = allItems.slice(0, visibleCount);
+        toShow.forEach(function(r){
+          var initial = (r.name || '?').trim().charAt(0).toUpperCase();
+          var color = colorForName(r.name || '?');
+          var dateStr = formatDate(r.timestamp);
+          html += '<div class="dh-rv-item">';
+          html += '<div class="dh-rv-avatar" style="background:' + color + '">' + initial + '</div>';
+          html += '<div class="dh-rv-item-body">';
+          html += '<div class="dh-rv-item-top"><h5>' + escapeHtml(r.name) + '</h5><span class="dh-rv-date">' + dateStr + '</span></div>';
+          html += '<span class="dh-stars-static">' + renderStarsStatic(r.rating) + '</span>';
+          html += '<p>' + escapeHtml(r.text) + '</p>';
+          if(r.imageUrl){ html += '<img class="dh-rv-photo" src="' + r.imageUrl + '"/>'; }
+          html += '</div></div>';
+        });
+        if(allItems.length > visibleCount){
+          html += '<button class="dh-rv-seemore" data-role="dh-rv-seemore">See More Reviews</button>';
+        }
+        listEl.innerHTML = html;
+        var moreBtn = listEl.querySelector('[data-role="dh-rv-seemore"]');
+        if(moreBtn){
+          moreBtn.addEventListener('click', function(){
+            visibleCount += PAGE_SIZE;
+            renderList();
+          });
+        }
+      }
+
       function loadReviews(){
         var listEl = wrap.querySelector('[data-role="dh-rv-list"]');
         dhDB.collection('reviews').where('postId','==',postId).get().then(function(snap){
@@ -89,21 +123,9 @@
           wrap.querySelector('[data-role="dh-avg-stars"]').textContent = renderStarsStatic(avg);
           wrap.querySelector('[data-role="dh-avg-text"]').textContent = avg.toFixed(1) + ' out of 5 (' + items.length + ' review' + (items.length>1?'s':'') + ')';
           updateBadge(avg, items.length);
-          var html = '';
-          items.forEach(function(r){
-            var initial = (r.name || '?').trim().charAt(0).toUpperCase();
-            var color = colorForName(r.name || '?');
-            var dateStr = formatDate(r.timestamp);
-            html += '<div class="dh-rv-item">';
-            html += '<div class="dh-rv-avatar" style="background:' + color + '">' + initial + '</div>';
-            html += '<div class="dh-rv-item-body">';
-            html += '<div class="dh-rv-item-top"><h5>' + escapeHtml(r.name) + '</h5><span class="dh-rv-date">' + dateStr + '</span></div>';
-            html += '<span class="dh-stars-static">' + renderStarsStatic(r.rating) + '</span>';
-            html += '<p>' + escapeHtml(r.text) + '</p>';
-            if(r.imageUrl){ html += '<img class="dh-rv-photo" src="' + r.imageUrl + '"/>'; }
-            html += '</div></div>';
-          });
-          listEl.innerHTML = html;
+          allItems = items;
+          visibleCount = PAGE_SIZE;
+          renderList();
         }).catch(function(){
           listEl.innerHTML = '<div class="dh-rv-empty">Could not load reviews right now.</div>';
         });
