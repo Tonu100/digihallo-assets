@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<title>Digihallo Review Admin</title>
+<style>
+  :root{--bg:#f8fafc;--card:#fff;--text:#0f172a;--muted:#64748b;--line:#e5e7eb;--brand:#6d59ff;--ok:#166534;--bad:#991b1b;}
+  @media (prefers-color-scheme: dark){:root{--bg:#0f172a;--card:#1e293b;--text:#f1f5f9;--muted:#94a3b8;--line:#334155;}}
+  *{box-sizing:border-box}
+  body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;background:var(--bg);color:var(--text);padding-top:env(safe-area-inset-top,0)}
+  header{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:14px 18px;background:var(--card);border-bottom:1px solid var(--line);position:sticky;top:0;z-index:5}
+  header h1{font-size:1.1rem;margin:0}
+  main{max-width:860px;margin:0 auto;padding:18px}
+  button{font:inherit;cursor:pointer;border-radius:8px;border:1px solid var(--line);background:var(--card);color:var(--text);padding:8px 14px}
+  button.primary{background:var(--brand);border-color:var(--brand);color:#fff;font-weight:600}
+  button.good{border-color:#16a34a;color:#16a34a}
+  button.warn{border-color:#d97706;color:#d97706}
+  button.danger{border-color:#dc2626;color:#dc2626}
+  button:disabled{opacity:.5;cursor:not-allowed}
+  .tabs{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:16px}
+  .tabs button.active{background:var(--brand);border-color:var(--brand);color:#fff}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px;margin-bottom:14px}
+  .top{display:flex;justify-content:space-between;gap:8px;flex-wrap:wrap;align-items:center}
+  .product{font-weight:700}
+  .product a{color:var(--brand);text-decoration:none}
+  .meta{color:var(--muted);font-size:.85rem}
+  .stars{color:#f59e0b;letter-spacing:2px}
+  .badge{display:inline-block;font-size:.75rem;padding:2px 10px;border-radius:20px;border:1px solid var(--line);margin-left:6px}
+  .badge.pending{color:#b45309;border-color:#fde68a;background:#fff7ed}
+  .badge.approved{color:var(--ok);border-color:#bbf7d0;background:#f0fdf4}
+  .badge.hidden{color:var(--bad);border-color:#fecaca;background:#fef2f2}
+  .text{margin:10px 0;white-space:pre-wrap;word-break:break-word}
+  .photo{max-width:160px;border-radius:8px;display:block;margin:8px 0}
+  textarea{width:100%;min-height:70px;padding:10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--text);font:inherit;resize:vertical}
+  .actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  #msg{margin-bottom:14px;padding:10px 14px;border-radius:8px;display:none}
+  #msg.ok{display:block;background:#f0fdf4;color:var(--ok)}
+  #msg.err{display:block;background:#fef2f2;color:var(--bad)}
+  .center{text-align:center;padding:60px 10px}
+  .hide{display:none!important}
+</style>
+</head>
+<body>
+<header>
+  <h1>Digihallo &middot; Review Admin</h1>
+  <div>
+    <span id="who" class="meta"></span>
+    <button id="btnOut" class="hide">Sign out</button>
+  </div>
+</header>
+
+<main>
+  <div id="loginBox" class="center">
+    <p>Sign in with your admin Google account.</p>
+    <button id="btnIn" class="primary">Sign in with Google</button>
+  </div>
+
+  <div id="panel" class="hide">
+    <div id="msg"></div>
+    <div class="tabs" id="tabs"></div>
+    <div style="margin-bottom:14px" id="fixBox" class="hide">
+      <button id="btnFix" class="warn"></button>
+    </div>
+    <div id="list"></div>
+    <div class="center hide" id="moreBox"><button id="btnMore">Load more</button></div>
+  </div>
+</main>
+
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script>
+firebase.initializeApp({
+  apiKey: "AIzaSyCH13i1g_GLuM_JpNISnmSBhsP80RerVjg",
+  authDomain: "digihallo-reviews.firebaseapp.com",
+  projectId: "digihallo-reviews",
+  storageBucket: "digihallo-reviews.firebasestorage.app",
+  messagingSenderId: "675531312909",
+  appId: "1:675531312909:web:7579364240d9be2695aa44"
+});
+var auth = firebase.auth();
+var db = firebase.firestore();
+
+var PAGE = 100;
+var items = [];       // [{id, data}]
+var lastDoc = null;
+var hasMore = false;
+var filter = 'all';
+var drafts = {};      // unsaved reply text per review id
+
+function $(id){ return document.getElementById(id); }
+function esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function(c){
+    return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c];
+  });
+}
+function say(text, ok){
+  var m = $('msg');
+  m.className = ok ? 'ok' : 'err';
+  m.textContent = text;
+  if(ok){ setTimeout(function(){ m.className = ''; m.style.display = 'none'; }, 3000); }
+}
+function statusOf(d){ return d.status || 'old'; }
+function dateStr(ts){
+  if(!ts || !ts.seconds) return '';
+  return new Date(ts.seconds * 1000).toLocaleString();
+}
+
+// ---------- Login ----------
+$('btnIn').onclick = function(){
+  auth.signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function(e){ alert(e.message); });
+};
+$('btnOut').onclick = function(){ auth.signOut(); };
+
+auth.onAuthStateChanged(function(user){
+  if(user){
+    $('loginBox').classList.add('hide');
+    $('panel').classList.remove('hide');
+    $('btnOut').classList.remove('hide');
+    $('who').textContent = user.email;
+    load(true);
+  } else {
+    $('loginBox').classList.remove('hide');
+    $('panel').classList.add('hide');
+    $('btnOut').classList.add('hide');
+    $('who').textContent = '';
+    items = []; lastDoc = null;
+  }
+});
+
+// ---------- Load ----------
+function load(reset){
+  var q = db.collection('reviews').orderBy('timestamp', 'desc').limit(PAGE);
+  if(!reset && lastDoc){ q = q.startAfter(lastDoc); }
+  q.get().then(function(snap){
+    if(reset){ items = []; }
+    snap.forEach(function(d){ items.push({id: d.id, data: d.data()}); });
+    if(snap.docs.length){ lastDoc = snap.docs[snap.docs.length - 1]; }
+    hasMore = snap.size === PAGE;
+    renderAll();
+  }).catch(function(e){
+    if(e.code === 'permission-denied'){
+      say('This Google account is not the admin. Sign out and use the correct account.', false);
+    } else {
+      say('Could not load reviews: ' + e.message, false);
+    }
+  });
+}
+$('btnMore').onclick = function(){ load(false); };
+
+// ---------- Render ----------
+function counts(){
+  var c = {pending:0, approved:0, hidden:0, all:items.length, old:0};
+  items.forEach(function(i){ var s = statusOf(i.data); if(c[s] != null){ c[s]++; } });
+  return c;
+}
+
+function renderTabs(){
+  var c = counts();
+  var tabs = [['pending','Pending'],['approved','Approved'],['hidden','Hidden'],['all','All']];
+  $('tabs').innerHTML = tabs.map(function(t){
+    return '<button data-tab="' + t[0] + '" class="' + (filter === t[0] ? 'active' : '') + '">' + t[1] + ' (' + c[t[0]] + ')</button>';
+  }).join('');
+  if(c.old > 0){
+    $('fixBox').classList.remove('hide');
+    $('btnFix').textContent = 'Approve ' + c.old + ' old review(s) (no status yet)';
+  } else {
+    $('fixBox').classList.add('hide');
+  }
+}
+
+function cardHtml(it){
+  var d = it.data;
+  var st = statusOf(d);
+  var name = d.productName || ('Product ID: ' + d.postId);
+  var url = d.productUrl && /^https?:\/\//.test(d.productUrl) ? d.productUrl : '';
+  var stars = '';
+  for(var i = 1; i <= 5; i++){ stars += i <= d.rating ? '\u2605' : '\u2606'; }
+  var photo = d.imageUrl && d.imageUrl.indexOf('https://res.cloudinary.com/') === 0
+    ? '<a href="' + esc(d.imageUrl) + '" target="_blank" rel="noopener"><img class="photo" src="' + esc(d.imageUrl.replace('/upload/', '/upload/w_300,q_auto,f_auto/')) + '" alt="photo"></a>' : '';
+  var replyVal = drafts[it.id] != null ? drafts[it.id] : (d.reply || '');
+  return '<div class="card" data-card="' + esc(it.id) + '">' +
+    '<div class="top"><div class="product">' +
+      (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(name) + '</a>' : esc(name)) +
+      '<span class="badge ' + esc(st) + '">' + esc(st) + '</span></div>' +
+      '<div class="meta">' + esc(dateStr(d.timestamp)) + '</div></div>' +
+    '<div class="meta">' + esc(d.name) + ' &middot; <span class="stars">' + stars + '</span></div>' +
+    '<div class="text">' + esc(d.text) + '</div>' + photo +
+    '<textarea maxlength="1000" data-reply="' + esc(it.id) + '" placeholder="Write your reply...">' + esc(replyVal) + '</textarea>' +
+    '<div class="actions">' +
+      '<button class="primary" data-act="save" data-id="' + esc(it.id) + '">Save reply</button>' +
+      (st !== 'approved' ? '<button class="good" data-act="approved" data-id="' + esc(it.id) + '">Approve</button>' : '') +
+      (st !== 'hidden' ? '<button class="warn" data-act="hidden" data-id="' + esc(it.id) + '">Hide</button>' : '') +
+      '<button class="danger" data-act="delete" data-id="' + esc(it.id) + '">Delete</button>' +
+    '</div></div>';
+}
+
+function renderAll(){
+  renderTabs();
+  var shown = items.filter(function(i){
+    if(filter === 'all'){ return true; }
+    return statusOf(i.data) === filter;
+  });
+  $('list').innerHTML = shown.length
+    ? shown.map(cardHtml).join('')
+    : '<div class="center meta">No reviews here.</div>';
+  $('moreBox').classList.toggle('hide', !hasMore);
+}
+
+function findItem(id){
+  for(var i = 0; i < items.length; i++){ if(items[i].id === id){ return items[i]; } }
+  return null;
+}
+
+// ---------- Actions ----------
+$('tabs').addEventListener('click', function(e){
+  var t = e.target.getAttribute('data-tab');
+  if(t){ filter = t; renderAll(); }
+});
+
+$('list').addEventListener('input', function(e){
+  var id = e.target.getAttribute('data-reply');
+  if(id){ drafts[id] = e.target.value; }
+});
+
+$('list').addEventListener('click', function(e){
+  var act = e.target.getAttribute('data-act');
+  var id = e.target.getAttribute('data-id');
+  if(!act || !id){ return; }
+  var it = findItem(id);
+  if(!it){ return; }
+  var ref = db.collection('reviews').doc(id);
+  e.target.disabled = true;
+
+  if(act === 'save'){
+    var txt = (drafts[id] != null ? drafts[id] : (it.data.reply || '')).trim();
+    ref.update({reply: txt, repliedAt: firebase.firestore.FieldValue.serverTimestamp()}).then(function(){
+      it.data.reply = txt;
+      delete drafts[id];
+      say('Reply saved.', true);
+      var old = document.querySelector('[data-card="' + id + '"]');
+      if(old){ var tmp = document.createElement('div'); tmp.innerHTML = cardHtml(it); old.replaceWith(tmp.firstChild); }
+    }).catch(function(err){ e.target.disabled = false; say('Failed: ' + err.message, false); });
+
+  } else if(act === 'approved' || act === 'hidden'){
+    ref.update({status: act}).then(function(){
+      it.data.status = act;
+      say(act === 'approved' ? 'Review approved.' : 'Review hidden.', true);
+      renderAll();
+    }).catch(function(err){ e.target.disabled = false; say('Failed: ' + err.message, false); });
+
+  } else if(act === 'delete'){
+    if(!confirm('Delete this review permanently?')){ e.target.disabled = false; return; }
+    ref.delete().then(function(){
+      items = items.filter(function(x){ return x.id !== id; });
+      say('Review deleted.', true);
+      renderAll();
+    }).catch(function(err){ e.target.disabled = false; say('Failed: ' + err.message, false); });
+  }
+});
+
+// One-time: old reviews (made before this panel) get status "approved"
+$('btnFix').onclick = function(){
+  var old = items.filter(function(i){ return !i.data.status; }).slice(0, 400);
+  if(!old.length){ return; }
+  var batch = db.batch();
+  old.forEach(function(i){ batch.update(db.collection('reviews').doc(i.id), {status: 'approved'}); });
+  batch.commit().then(function(){
+    old.forEach(function(i){ i.data.status = 'approved'; });
+    say(old.length + ' old review(s) approved.', true);
+    renderAll();
+  }).catch(function(err){ say('Failed: ' + err.message, false); });
+};
+</script>
+</body>
+</html>
