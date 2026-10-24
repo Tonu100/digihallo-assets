@@ -60,8 +60,9 @@
   <div id="panel" class="hide">
     <div id="msg"></div>
     <div class="tabs" id="tabs"></div>
-    <div style="margin-bottom:14px" id="fixBox" class="hide">
-      <button id="btnFix" class="warn"></button>
+    <div style="margin-bottom:14px;display:flex;gap:8px;flex-wrap:wrap" id="fixBox">
+      <button id="btnFix" class="warn hide"></button>
+      <button id="btnNames" class="warn hide"></button>
     </div>
     <div id="list"></div>
     <div class="center hide" id="moreBox"><button id="btnMore">Load more</button></div>
@@ -89,6 +90,10 @@ var lastDoc = null;
 var hasMore = false;
 var filter = 'all';
 var drafts = {};      // unsaved reply text per review id
+var BLOG = 'https://digihallo.blogspot.com';
+var prodCache = {};   // postId -> {title, url} looked up from the blog feed
+var asked = {};
+var jpN = 0;
 
 function $(id){ return document.getElementById(id); }
 function esc(s){
@@ -140,6 +145,7 @@ function load(reset){
     if(snap.docs.length){ lastDoc = snap.docs[snap.docs.length - 1]; }
     hasMore = snap.size === PAGE;
     renderAll();
+    resolveNames();
   }).catch(function(e){
     if(e.code === 'permission-denied'){
       say('This Google account is not the admin. Sign out and use the correct account.', false);
@@ -149,6 +155,47 @@ function load(reset){
   });
 }
 $('btnMore').onclick = function(){ load(false); };
+
+// ---------- Product names for old reviews (looked up from the blog feed) ----------
+function jsonp(url, cb){
+  var name = 'dhcb' + (++jpN), done = false, sc = document.createElement('script');
+  function fin(v){
+    if(done){ return; }
+    done = true;
+    try { delete window[name]; } catch(e) { window[name] = undefined; }
+    if(sc.parentNode){ sc.parentNode.removeChild(sc); }
+    cb(v);
+  }
+  window[name] = function(d){ fin(d); };
+  sc.onerror = function(){ fin(null); };
+  setTimeout(function(){ fin(null); }, 8000);
+  sc.src = url + (url.indexOf('?') > -1 ? '&' : '?') + 'alt=json-in-script&callback=' + name;
+  document.body.appendChild(sc);
+}
+function storeProduct(id, d){
+  if(!d || !d.entry){ return; }
+  var e = d.entry, url = '';
+  (e.link || []).forEach(function(l){ if(l.rel === 'alternate'){ url = l.href; } });
+  prodCache[id] = {title: (e.title && e.title.$t) || '', url: url};
+  renderAll();
+}
+function resolveNames(){
+  items.forEach(function(it){
+    var id = it.data.postId;
+    if(!id || it.data.productName || prodCache[id] || asked[id]){ return; }
+    asked[id] = true;
+    jsonp(BLOG + '/feeds/posts/default/' + encodeURIComponent(id), function(d){
+      if(d && d.entry){ storeProduct(id, d); return; }
+      jsonp(BLOG + '/feeds/pages/default/' + encodeURIComponent(id), function(d2){ storeProduct(id, d2); });
+    });
+  });
+}
+function needNames(){
+  return items.filter(function(i){
+    var p = prodCache[i.data.postId];
+    return !i.data.productName && p && p.title;
+  });
+}
 
 // ---------- Render ----------
 function counts(){
@@ -164,18 +211,27 @@ function renderTabs(){
     return '<button data-tab="' + t[0] + '" class="' + (filter === t[0] ? 'active' : '') + '">' + t[1] + ' (' + c[t[0]] + ')</button>';
   }).join('');
   if(c.old > 0){
-    $('fixBox').classList.remove('hide');
+    $('btnFix').classList.remove('hide');
     $('btnFix').textContent = 'Approve ' + c.old + ' old review(s) (no status yet)';
   } else {
-    $('fixBox').classList.add('hide');
+    $('btnFix').classList.add('hide');
+  }
+  var nn = needNames().length;
+  if(nn > 0){
+    $('btnNames').classList.remove('hide');
+    $('btnNames').textContent = 'Save product names into ' + nn + ' old review(s)';
+  } else {
+    $('btnNames').classList.add('hide');
   }
 }
 
 function cardHtml(it){
   var d = it.data;
   var st = statusOf(d);
-  var name = d.productName || ('Product ID: ' + d.postId);
-  var url = d.productUrl && /^https?:\/\//.test(d.productUrl) ? d.productUrl : '';
+  var pi = prodCache[d.postId] || {};
+  var name = d.productName || pi.title || ('Product ID: ' + d.postId);
+  var rawUrl = d.productUrl || pi.url || '';
+  var url = /^https?:\/\//.test(rawUrl) ? rawUrl : '';
   var stars = '';
   for(var i = 1; i <= 5; i++){ stars += i <= d.rating ? '\u2605' : '\u2606'; }
   var photo = d.imageUrl && d.imageUrl.indexOf('https://res.cloudinary.com/') === 0
@@ -270,6 +326,29 @@ $('btnFix').onclick = function(){
   batch.commit().then(function(){
     old.forEach(function(i){ i.data.status = 'approved'; });
     say(old.length + ' old review(s) approved.', true);
+    renderAll();
+  }).catch(function(err){ say('Failed: ' + err.message, false); });
+};
+
+// Save looked-up product names into the old reviews (one time)
+$('btnNames').onclick = function(){
+  var list = needNames().slice(0, 400);
+  if(!list.length){ return; }
+  var batch = db.batch();
+  list.forEach(function(i){
+    var p = prodCache[i.data.postId];
+    batch.update(db.collection('reviews').doc(i.id), {
+      productName: p.title.slice(0, 190),
+      productUrl: (p.url || '').slice(0, 290)
+    });
+  });
+  batch.commit().then(function(){
+    list.forEach(function(i){
+      var p = prodCache[i.data.postId];
+      i.data.productName = p.title.slice(0, 190);
+      i.data.productUrl = (p.url || '').slice(0, 290);
+    });
+    say('Product names saved in ' + list.length + ' review(s).', true);
     renderAll();
   }).catch(function(err){ say('Failed: ' + err.message, false); });
 };
