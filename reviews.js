@@ -119,6 +119,8 @@
 
       // Adds star-rating data for Google (only real, approved reviews)
       function injectSchema(avg, count){
+        // Star-rating data only for product posts (URL like /2026/10/name.html)
+        if(!/\/\d{4}\/\d{2}\//.test(location.pathname)){ return; }
         var old = document.getElementById('dh-product-schema');
         if(old){ old.parentNode.removeChild(old); }
         if(!count) return;
