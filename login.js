@@ -1,6 +1,6 @@
 (function(){
-  // Set this to your My Downloads page URL later (Step 3). Empty = link hidden.
-  var MY_DOWNLOADS_URL = '';
+  // Page that shows the customer dashboard (create it in Blogger with this permalink)
+  var ACCOUNT_URL = '/p/my-account.html';
 
   function ready(fn){
     if(document.readyState === 'loading'){ document.addEventListener('DOMContentLoaded', fn); }
@@ -13,6 +13,10 @@
     });
   }
 
+  var ICON_USER = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>';
+  var ICON_DL = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12"/><path d="M7 11l5 5 5-5"/><path d="M5 21h14"/></svg>';
+  var ICON_OUT = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="M16 17l5-5-5-5"/><path d="M21 12H9"/></svg>';
+
   ready(function(){
     if(typeof firebase === 'undefined' || !firebase.auth || typeof dhDB === 'undefined'){ return; }
     var host = document.querySelector('.search-wrap');
@@ -22,26 +26,31 @@
 
     var css = document.createElement('style');
     css.textContent =
-      '.dh-acct{position:relative;display:inline-flex;align-items:center;margin:0 5px}' +
-      '.dh-acct-btn{display:flex;align-items:center;justify-content:center;width:30px;height:30px;padding:0;border:0;border-radius:50%;background:transparent;color:var(--main-menu-text-color,#111);cursor:pointer;overflow:hidden}' +
-      '.dh-acct-btn:hover{opacity:.8}' +
-      '.dh-acct-btn svg{width:22px;height:22px}' +
-      '.dh-acct-btn img{width:30px;height:30px;border-radius:50%;object-fit:cover;display:block}' +
-      '.dh-acct-ini{width:30px;height:30px;border-radius:50%;background:#6d59ff;color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}' +
-      '.dh-acct-menu{display:none;position:absolute;top:44px;right:0;min-width:220px;background:var(--submenu-bg-color,#fff);color:var(--sub-menu-text-color,#111);border:1px solid rgba(128,128,128,.25);border-radius:10px;box-shadow:0 8px 24px rgba(0,0,0,.15);padding:12px;z-index:99999;line-height:1.4;font-size:14px}' +
+      '.dh-acct{position:relative;display:inline-flex;align-items:center;margin:0 6px}' +
+      '.dh-signin{display:inline-flex;align-items:center;justify-content:center;gap:7px;height:34px;padding:0 14px;border-radius:999px;border:1.5px solid #6d59ff;background:transparent;color:#6d59ff;font-family:inherit;font-weight:600;font-size:13px;line-height:1;cursor:pointer;transition:background .2s,color .2s}' +
+      '.dh-signin:hover{background:#6d59ff;color:#fff}' +
+      '.dh-signin svg{width:16px;height:16px}' +
+      '.dh-avatar-btn{width:36px;height:36px;border-radius:50%;padding:2px;border:2px solid #6d59ff;background:transparent;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:box-shadow .2s}' +
+      '.dh-avatar-btn:hover{box-shadow:0 0 0 3px rgba(109,89,255,.25)}' +
+      '.dh-avatar-btn img,.dh-ini{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}' +
+      '.dh-ini{background:#6d59ff;color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}' +
+      '.dh-acct-menu{display:none;position:absolute;top:48px;right:0;width:272px;background:var(--submenu-bg-color,#fff);color:var(--sub-menu-text-color,#1e293b);border:1px solid rgba(128,128,128,.22);border-radius:14px;box-shadow:0 14px 34px rgba(0,0,0,.16);overflow:hidden;z-index:99999;line-height:1.4;font-size:14px;text-align:left}' +
       '.dh-acct.open .dh-acct-menu{display:block}' +
-      '.dh-acct-name{font-weight:700;margin:0 0 2px;word-break:break-word}' +
-      '.dh-acct-mail{opacity:.75;font-size:12px;margin:0 0 10px;word-break:break-all}' +
-      '.dh-acct-link{display:block;width:100%;text-align:left;background:none;border:0;border-top:1px solid rgba(128,128,128,.2);padding:9px 2px;color:inherit;font:inherit;cursor:pointer;text-decoration:none}' +
-      '.dh-acct-link:hover{color:#6d59ff}';
+      '.dh-menu-head{display:flex;align-items:center;gap:12px;padding:16px;border-bottom:1px solid rgba(128,128,128,.18);background:rgba(109,89,255,.06)}' +
+      '.dh-menu-head .dh-ini,.dh-menu-head img{width:44px;height:44px;flex:0 0 44px;border-radius:50%;object-fit:cover}' +
+      '.dh-menu-name{font-weight:700;margin:0;word-break:break-word}' +
+      '.dh-menu-mail{opacity:.7;font-size:12px;margin:2px 0 0;word-break:break-all}' +
+      '.dh-menu-item{display:flex;align-items:center;gap:12px;width:100%;padding:12px 16px;background:none;border:0;color:inherit;font-family:inherit;font-size:14px;cursor:pointer;text-decoration:none;text-align:left;transition:background .15s}' +
+      '.dh-menu-item:hover{background:rgba(109,89,255,.08);color:#6d59ff}' +
+      '.dh-menu-item svg{width:18px;height:18px;flex:0 0 18px}' +
+      '.dh-menu-sep{border-top:1px solid rgba(128,128,128,.18)}' +
+      '@media(max-width:640px){.dh-signin{width:34px;padding:0}.dh-signin span{display:none}.dh-acct-menu{right:-40px}}';
     document.head.appendChild(css);
 
     var wrap = document.createElement('div');
     wrap.className = 'dh-acct';
     var first = host.querySelector('.oixli-loveit');
     if(first){ host.insertBefore(wrap, first); } else { host.insertBefore(wrap, host.firstChild); }
-
-    var userIcon = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 3.6-7 8-7s8 3 8 7"/></svg>';
 
     function signIn(){
       var provider = new firebase.auth.GoogleAuthProvider();
@@ -55,6 +64,7 @@
         }
       });
     }
+    window.dhSignIn = signIn;
 
     function saveUser(u){
       var ref = dhDB.collection('users').doc(u.uid);
@@ -70,27 +80,28 @@
       }).catch(function(){});
     }
 
+    function avatarHtml(u, name){
+      if(u.photoURL){ return '<img src="' + esc(u.photoURL) + '" alt="" referrerpolicy="no-referrer">'; }
+      return '<span class="dh-ini">' + esc((name.trim().charAt(0) || 'U').toUpperCase()) + '</span>';
+    }
+
     function render(u){
       wrap.classList.remove('open');
       if(!u){
-        wrap.innerHTML = '<button type="button" class="dh-acct-btn" aria-label="Sign in" title="Sign in with Google">' + userIcon + '</button>';
-        wrap.querySelector('.dh-acct-btn').addEventListener('click', signIn);
+        wrap.innerHTML = '<button type="button" class="dh-signin" aria-label="Sign in" title="Sign in with Google">' + ICON_USER + '<span>Sign in</span></button>';
+        wrap.querySelector('.dh-signin').addEventListener('click', signIn);
         return;
       }
       var name = u.displayName || 'My Account';
-      var initial = name.trim().charAt(0).toUpperCase() || 'U';
-      var avatar = u.photoURL
-        ? '<img src="' + esc(u.photoURL) + '" alt="" referrerpolicy="no-referrer">'
-        : '<span class="dh-acct-ini">' + esc(initial) + '</span>';
       wrap.innerHTML =
-        '<button type="button" class="dh-acct-btn" aria-label="My account" title="My account">' + avatar + '</button>' +
+        '<button type="button" class="dh-avatar-btn" aria-label="My account" title="My account">' + avatarHtml(u, name) + '</button>' +
         '<div class="dh-acct-menu">' +
-          '<p class="dh-acct-name">' + esc(name) + '</p>' +
-          '<p class="dh-acct-mail">' + esc(u.email || '') + '</p>' +
-          (MY_DOWNLOADS_URL ? '<a class="dh-acct-link" href="' + esc(MY_DOWNLOADS_URL) + '">My Downloads</a>' : '') +
-          '<button type="button" class="dh-acct-link" data-act="out">Sign out</button>' +
+          '<div class="dh-menu-head">' + avatarHtml(u, name) +
+            '<div><p class="dh-menu-name">' + esc(name) + '</p><p class="dh-menu-mail">' + esc(u.email || '') + '</p></div></div>' +
+          '<a class="dh-menu-item" href="' + esc(ACCOUNT_URL) + '">' + ICON_DL + '<span>My Account &amp; Downloads</span></a>' +
+          '<button type="button" class="dh-menu-item dh-menu-sep" data-act="out">' + ICON_OUT + '<span>Sign out</span></button>' +
         '</div>';
-      wrap.querySelector('.dh-acct-btn').addEventListener('click', function(e){
+      wrap.querySelector('.dh-avatar-btn').addEventListener('click', function(e){
         e.stopPropagation();
         wrap.classList.toggle('open');
       });
