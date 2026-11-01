@@ -34,8 +34,8 @@
       '.dh-avatar-btn:hover{box-shadow:0 0 0 3px rgba(109,89,255,.25)}' +
       '.dh-avatar-btn img,.dh-ini{width:100%;height:100%;border-radius:50%;object-fit:cover;display:block}' +
       '.dh-ini{background:#6d59ff;color:#fff;font-weight:700;font-size:14px;display:flex;align-items:center;justify-content:center}' +
-      '.dh-acct-menu{display:none;position:absolute;top:48px;right:0;width:272px;background:var(--submenu-bg-color,#fff);color:var(--sub-menu-text-color,#1e293b);border:1px solid rgba(128,128,128,.22);border-radius:14px;box-shadow:0 14px 34px rgba(0,0,0,.16);overflow:hidden;z-index:99999;line-height:1.4;font-size:14px;text-align:left}' +
-      '.dh-acct.open .dh-acct-menu{display:block}' +
+      '.dh-acct-menu{display:none;position:fixed;top:60px;right:12px;width:272px;background:var(--submenu-bg-color,#fff);color:var(--sub-menu-text-color,#1e293b);border:1px solid rgba(128,128,128,.22);border-radius:14px;box-shadow:0 14px 34px rgba(0,0,0,.16);overflow:hidden;z-index:99999;line-height:1.4;font-size:14px;text-align:left}' +
+      '.dh-acct-menu.open{display:block}' +
       '.dh-menu-head{display:flex;align-items:center;gap:12px;padding:16px;border-bottom:1px solid rgba(128,128,128,.18);background:rgba(109,89,255,.06)}' +
       '.dh-menu-head .dh-ini,.dh-menu-head img{width:44px;height:44px;flex:0 0 44px;border-radius:50%;object-fit:cover}' +
       '.dh-menu-name{font-weight:700;margin:0;word-break:break-word}' +
@@ -44,7 +44,7 @@
       '.dh-menu-item:hover{background:rgba(109,89,255,.08);color:#6d59ff}' +
       '.dh-menu-item svg{width:18px;height:18px;flex:0 0 18px}' +
       '.dh-menu-sep{border-top:1px solid rgba(128,128,128,.18)}' +
-      '@media(max-width:640px){.dh-signin{width:34px;padding:0}.dh-signin span{display:none}.dh-acct-menu{right:-40px}}';
+      '@media(max-width:640px){.dh-signin{width:34px;padding:0}.dh-signin span{display:none}}';
     document.head.appendChild(css);
 
     var wrap = document.createElement('div');
@@ -85,32 +85,53 @@
       return '<span class="dh-ini">' + esc((name.trim().charAt(0) || 'U').toUpperCase()) + '</span>';
     }
 
+    var menuEl = null;
+
+    function closeMenu(){ if(menuEl){ menuEl.classList.remove('open'); } }
+
+    function placeMenu(btn){
+      var r = btn.getBoundingClientRect();
+      menuEl.style.top = Math.round(r.bottom + 10) + 'px';
+      menuEl.style.right = Math.max(8, Math.round(window.innerWidth - r.right)) + 'px';
+    }
+
     function render(u){
-      wrap.classList.remove('open');
+      if(menuEl && menuEl.parentNode){ menuEl.parentNode.removeChild(menuEl); }
+      menuEl = null;
       if(!u){
         wrap.innerHTML = '<button type="button" class="dh-signin" aria-label="Sign in" title="Sign in with Google">' + ICON_USER + '<span>Sign in</span></button>';
         wrap.querySelector('.dh-signin').addEventListener('click', signIn);
         return;
       }
       var name = u.displayName || 'My Account';
-      wrap.innerHTML =
-        '<button type="button" class="dh-avatar-btn" aria-label="My account" title="My account">' + avatarHtml(u, name) + '</button>' +
-        '<div class="dh-acct-menu">' +
-          '<div class="dh-menu-head">' + avatarHtml(u, name) +
-            '<div><p class="dh-menu-name">' + esc(name) + '</p><p class="dh-menu-mail">' + esc(u.email || '') + '</p></div></div>' +
-          '<a class="dh-menu-item" href="' + esc(ACCOUNT_URL) + '">' + ICON_DL + '<span>My Account &amp; Downloads</span></a>' +
-          '<button type="button" class="dh-menu-item dh-menu-sep" data-act="out">' + ICON_OUT + '<span>Sign out</span></button>' +
-        '</div>';
-      wrap.querySelector('.dh-avatar-btn').addEventListener('click', function(e){
+      wrap.innerHTML = '<button type="button" class="dh-avatar-btn" aria-label="My account" title="My account">' + avatarHtml(u, name) + '</button>';
+
+      menuEl = document.createElement('div');
+      menuEl.className = 'dh-acct-menu';
+      menuEl.innerHTML =
+        '<div class="dh-menu-head">' + avatarHtml(u, name) +
+          '<div><p class="dh-menu-name">' + esc(name) + '</p><p class="dh-menu-mail">' + esc(u.email || '') + '</p></div></div>' +
+        '<a class="dh-menu-item" href="' + esc(ACCOUNT_URL) + '">' + ICON_DL + '<span>My Account &amp; Downloads</span></a>' +
+        '<button type="button" class="dh-menu-item dh-menu-sep" data-act="out">' + ICON_OUT + '<span>Sign out</span></button>';
+      document.body.appendChild(menuEl);
+
+      var btn = wrap.querySelector('.dh-avatar-btn');
+      btn.addEventListener('click', function(e){
         e.stopPropagation();
-        wrap.classList.toggle('open');
+        placeMenu(btn);
+        menuEl.classList.toggle('open');
       });
-      wrap.querySelector('[data-act="out"]').addEventListener('click', function(){ auth.signOut(); });
+      menuEl.querySelector('[data-act="out"]').addEventListener('click', function(){
+        closeMenu();
+        auth.signOut();
+      });
     }
 
     document.addEventListener('click', function(e){
-      if(!wrap.contains(e.target)){ wrap.classList.remove('open'); }
+      if(menuEl && !menuEl.contains(e.target) && !wrap.contains(e.target)){ closeMenu(); }
     });
+    window.addEventListener('resize', closeMenu);
+    window.addEventListener('scroll', closeMenu, {passive: true});
 
     auth.onAuthStateChanged(function(u){
       render(u);
