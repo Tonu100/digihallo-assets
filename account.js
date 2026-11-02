@@ -82,7 +82,8 @@
       return fetch(DOWNLOADS_API + '?idToken=' + encodeURIComponent(t));
     }).then(function(r){ return r.json(); }).then(function(d){
       if(d && d.error){
-        el.innerHTML = '<p class="dh-ac-note">We could not verify your sign-in. Please sign out, sign in again and retry.</p>';
+        el.innerHTML = '<p class="dh-ac-note">We could not verify your sign-in. Please sign out, sign in again and retry.' +
+          (d.detail ? '<br><small style="opacity:.6">' + esc(d.detail) + '</small>' : '') + '</p>';
         return;
       }
       renderOrders(d && d.orders);
