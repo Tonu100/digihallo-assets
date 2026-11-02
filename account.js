@@ -1,5 +1,5 @@
 (function(){
-  // Step 3 will fill this with your Apps Script web app URL (it returns the customer's purchases).
+  // Your Apps Script web app URL (it returns the signed-in customer's purchases).
   var DOWNLOADS_API = 'https://script.google.com/macros/s/AKfycbxGzg8c-6lSiPEybUSN-cMnotoQT45I8ZBteKa-RF_zbjltycZnVVpTYuiBLXpQM_uD/exec';
 
   var box;
