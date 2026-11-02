@@ -1,6 +1,6 @@
 (function(){
   // Step 3 will fill this with your Apps Script web app URL (it returns the customer's purchases).
-  var DOWNLOADS_API = 'https://script.google.com/macros/s/AKfycbxGzg8c-6lSiPEybUSN-cMnotoQT45I8ZBteKa-RF_zbjltycZnVVpTYuiBLXpQM_uD/exec';
+  var DOWNLOADS_API = '';
 
   var box;
 
@@ -49,7 +49,7 @@
     box.innerHTML =
       '<div class="dh-ac-card dh-ac-center">' +
         '<h2>Sign in to your account</h2>' +
-        '<p>Use your Google account to see your profile and your purchase history.</p>' +
+        '<p>Sign in with the same Gmail address you used when you bought your products. Your purchases and download links will appear here.</p>' +
         '<button type="button" class="dh-ac-google">' + G_LOGO + '<span>Continue with Google</span></button>' +
       '</div>';
     box.querySelector('.dh-ac-google').addEventListener('click', signIn);
@@ -108,7 +108,7 @@
         '<p class="dh-ac-mail">' + esc(u.email || '') + '</p>' +
         (since ? '<p class="dh-ac-since">' + esc(since) + '</p>' : '') + '</div>' +
         '<button type="button" class="dh-ac-out">Sign out</button></div></div>' +
-      '<div class="dh-ac-card"><h2>My Downloads</h2><div id="dh-ac-orders"></div></div>';
+      '<div class="dh-ac-card"><h2>My Downloads</h2><p>Purchases made with <b>' + esc(u.email || '') + '</b> appear below. Bought with a different email? Sign in with that Gmail.</p><div id="dh-ac-orders"></div></div>';
     box.querySelector('.dh-ac-out').addEventListener('click', function(){ firebase.auth().signOut(); });
     loadOrders(u);
   }
