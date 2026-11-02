@@ -1,6 +1,6 @@
 (function(){
   // Step 3 will fill this with your Apps Script web app URL (it returns the customer's purchases).
-  var DOWNLOADS_API = '';
+  var DOWNLOADS_API = 'https://script.google.com/macros/s/AKfycbxGzg8c-6lSiPEybUSN-cMnotoQT45I8ZBteKa-RF_zbjltycZnVVpTYuiBLXpQM_uD/exec';
 
   var box;
 
@@ -81,6 +81,10 @@
     u.getIdToken().then(function(t){
       return fetch(DOWNLOADS_API + '?idToken=' + encodeURIComponent(t));
     }).then(function(r){ return r.json(); }).then(function(d){
+      if(d && d.error){
+        el.innerHTML = '<p class="dh-ac-note">We could not verify your sign-in. Please sign out, sign in again and retry.</p>';
+        return;
+      }
       renderOrders(d && d.orders);
     }).catch(function(){
       el.innerHTML = '<p class="dh-ac-note">Could not load your purchases right now. Please try again later.</p>';
