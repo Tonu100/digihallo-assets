@@ -49,7 +49,7 @@
     box.innerHTML =
       '<div class="dh-ac-card dh-ac-center">' +
         '<h2>Sign in to your account</h2>' +
-        '<p>Sign in with the same Gmail address you used when you bought your products. Your purchases and download links will appear here.</p>' +
+        '<p>Just made a purchase? Sign in with the Google account that matches the email address you entered on the payment form. Your downloads will appear here.</p>' +
         '<button type="button" class="dh-ac-google">' + G_LOGO + '<span>Continue with Google</span></button>' +
       '</div>';
     box.querySelector('.dh-ac-google').addEventListener('click', signIn);
@@ -59,7 +59,7 @@
     var el = document.getElementById('dh-ac-orders');
     if(!el){ return; }
     if(!list || !list.length){
-      el.innerHTML = '<p class="dh-ac-note">No purchases found for this email yet. Please sign in with the same email address you used at checkout.</p>';
+     el.innerHTML = '<p class="dh-ac-note">No purchases found for this email yet. If you just paid, please wait a minute and refresh this page. Used a different email on the payment form? Sign in with that email instead.</p>';
       return;
     }
     var html = '';
@@ -74,7 +74,7 @@
   function loadOrders(u){
     var el = document.getElementById('dh-ac-orders');
     if(!DOWNLOADS_API){
-      el.innerHTML = '<p class="dh-ac-note">Your order history will appear here soon. Until then, your download link is always emailed to you right after purchase (please check your spam folder too).</p>';
+     el.innerHTML = '<p class="dh-ac-note">Downloads are temporarily unavailable. Please try again later or contact us.</p>';
       return;
     }
     el.innerHTML = '<p>Loading your purchases...</p>';
@@ -82,8 +82,7 @@
       return fetch(DOWNLOADS_API + '?idToken=' + encodeURIComponent(t));
     }).then(function(r){ return r.json(); }).then(function(d){
       if(d && d.error){
-        el.innerHTML = '<p class="dh-ac-note">We could not verify your sign-in. Please sign out, sign in again and retry.' +
-          (d.detail ? '<br><small style="opacity:.6">' + esc(d.detail) + '</small>' : '') + '</p>';
+       el.innerHTML = '<p class="dh-ac-note">We could not verify your sign-in. Please sign out, sign in again and retry.</p>';
         return;
       }
       renderOrders(d && d.orders);
@@ -108,7 +107,7 @@
         '<p class="dh-ac-mail">' + esc(u.email || '') + '</p>' +
         (since ? '<p class="dh-ac-since">' + esc(since) + '</p>' : '') + '</div>' +
         '<button type="button" class="dh-ac-out">Sign out</button></div></div>' +
-      '<div class="dh-ac-card"><h2>My Downloads</h2><p>Purchases made with <b>' + esc(u.email || '') + '</b> appear below. Bought with a different email? Sign in with that Gmail.</p><div id="dh-ac-orders"></div></div>';
+     '<div class="dh-ac-card"><h2>My Downloads</h2><p>Purchases made with <b>' + esc(u.email || '') + '</b> appear below. Used a different email on the payment form? Sign out and sign in with that Google account.</p><div id="dh-ac-orders"></div></div>';
     box.querySelector('.dh-ac-out').addEventListener('click', function(){ firebase.auth().signOut(); });
     loadOrders(u);
   }
