@@ -22,6 +22,7 @@
       '.dh-ac-card p{margin:0 0 16px;opacity:.8}' +
       '.dh-ac-google{display:inline-flex;align-items:center;gap:10px;background:#fff;color:#3c4043;border:1px solid #dadce0;border-radius:8px;padding:11px 20px;font-weight:600;font-size:15px;cursor:pointer;font-family:inherit;box-shadow:0 1px 2px rgba(0,0,0,.08)}' +
       '.dh-ac-google:hover{box-shadow:0 2px 8px rgba(0,0,0,.15)}' +
+      '.dh-ac-fine{font-size:.85rem;opacity:.65;margin:16px 0 0!important}' +
       '.dh-ac-profile{display:flex;align-items:center;gap:16px;flex-wrap:wrap}' +
       '.dh-ac-profile img,.dh-ac-ini{width:64px;height:64px;border-radius:50%;object-fit:cover;flex:0 0 64px}' +
       '.dh-ac-ini{background:#6d59ff;color:#fff;font-weight:700;font-size:26px;display:flex;align-items:center;justify-content:center}' +
@@ -48,9 +49,10 @@
   function showLoggedOut(){
     box.innerHTML =
       '<div class="dh-ac-card dh-ac-center">' +
-        '<h2>Sign in to your account</h2>' +
-        '<p>Just made a purchase? Sign in with the Google account that matches the email address you entered on the payment form. Your downloads will appear here.</p>' +
+        '<h2>Access your downloads</h2>' +
+        '<p>Sign in with the Google account that matches the email you entered on the payment form.</p>' +
         '<button type="button" class="dh-ac-google">' + G_LOGO + '<span>Continue with Google</span></button>' +
+        '<p class="dh-ac-fine">Secure sign-in with Google. No Google account for that email? Use the download link we emailed you.</p>' +
       '</div>';
     box.querySelector('.dh-ac-google').addEventListener('click', signIn);
   }
@@ -59,7 +61,7 @@
     var el = document.getElementById('dh-ac-orders');
     if(!el){ return; }
     if(!list || !list.length){
-     el.innerHTML = '<p class="dh-ac-note">No purchases found for this email yet. If you just paid, please wait a minute and refresh this page. Used a different email on the payment form? Sign in with that email instead.</p>';
+      el.innerHTML = '<p class="dh-ac-note">No purchases found for this email yet. If you just paid, please wait a minute and refresh this page. Used a different email on the payment form? Sign in with that email instead.</p>';
       return;
     }
     var html = '';
@@ -74,7 +76,7 @@
   function loadOrders(u){
     var el = document.getElementById('dh-ac-orders');
     if(!DOWNLOADS_API){
-     el.innerHTML = '<p class="dh-ac-note">Downloads are temporarily unavailable. Please try again later or contact us.</p>';
+      el.innerHTML = '<p class="dh-ac-note">Downloads are temporarily unavailable. Please try again later or contact us.</p>';
       return;
     }
     el.innerHTML = '<p>Loading your purchases...</p>';
@@ -82,7 +84,7 @@
       return fetch(DOWNLOADS_API + '?idToken=' + encodeURIComponent(t));
     }).then(function(r){ return r.json(); }).then(function(d){
       if(d && d.error){
-       el.innerHTML = '<p class="dh-ac-note">We could not verify your sign-in. Please sign out, sign in again and retry.</p>';
+        el.innerHTML = '<p class="dh-ac-note">We could not verify your sign-in. Please sign out, sign in again and retry.</p>';
         return;
       }
       renderOrders(d && d.orders);
@@ -107,7 +109,7 @@
         '<p class="dh-ac-mail">' + esc(u.email || '') + '</p>' +
         (since ? '<p class="dh-ac-since">' + esc(since) + '</p>' : '') + '</div>' +
         '<button type="button" class="dh-ac-out">Sign out</button></div></div>' +
-     '<div class="dh-ac-card"><h2>My Downloads</h2><p>Purchases made with <b>' + esc(u.email || '') + '</b> appear below. Used a different email on the payment form? Sign out and sign in with that Google account.</p><div id="dh-ac-orders"></div></div>';
+      '<div class="dh-ac-card"><h2>My Downloads</h2><p>Purchases made with <b>' + esc(u.email || '') + '</b> appear below. Used a different email on the payment form? Sign out and sign in with that Google account.</p><div id="dh-ac-orders"></div><p class="dh-ac-fine">Need help? Email us at mail.digihallo@gmail.com</p></div>';
     box.querySelector('.dh-ac-out').addEventListener('click', function(){ firebase.auth().signOut(); });
     loadOrders(u);
   }
