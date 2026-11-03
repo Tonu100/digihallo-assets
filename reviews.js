@@ -65,6 +65,7 @@
 
       var selectedRating = 0;
       var selectedFile = null;
+      var currentUser = null;
       var starsInput = wrap.querySelectorAll('[data-role="dh-input-stars"] span');
       starsInput.forEach(function(st){
         st.addEventListener('click', function(){
@@ -85,23 +86,17 @@
       var formBox = wrap.querySelector('.dh-rv-form');
       if(formBox){ formBox.appendChild(hp); }
 
-      // ---- Sign-in gate: only signed-in customers can write a review ----
-      var gate = document.createElement('div');
-      gate.style.cssText = 'display:none;text-align:center;padding:22px 16px;border:1px dashed #cbd5e1;border-radius:12px;margin-bottom:24px;background:#fff';
-      gate.innerHTML =
-        '<p style="margin:0 0 12px;color:#334155;font-size:.95rem">Please sign in with Google to write a review.</p>' +
-        '<button type="button" data-role="dh-rv-signin" style="background:#6d59ff;color:#fff;border:0;border-radius:8px;padding:10px 22px;font-weight:600;cursor:pointer;font-size:.95rem">Sign in with Google</button>';
-      if(formBox && formBox.parentNode){ formBox.parentNode.insertBefore(gate, formBox); }
-      gate.querySelector('[data-role="dh-rv-signin"]').addEventListener('click', function(){
-        if(window.dhSignIn){ window.dhSignIn(); }
-        else if(typeof firebase !== 'undefined' && firebase.auth){
-          firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function(){});
-        }
-      });
+      var msgEl = wrap.querySelector('[data-role="dh-rv-msg"]');
+
+      // Small note shown only to signed-out visitors
+      var hint = document.createElement('p');
+      hint.style.cssText = 'margin:10px 0 0;font-size:.85rem;color:#64748b';
+      hint.textContent = 'You will be asked to sign in with Google when you submit.';
+      if(msgEl && msgEl.parentNode){ msgEl.parentNode.insertBefore(hint, msgEl); }
 
       function applyAuth(u){
-        if(formBox){ formBox.style.display = u ? '' : 'none'; }
-        gate.style.display = u ? 'none' : 'block';
+        currentUser = u;
+        hint.style.display = u ? 'none' : 'block';
         if(u){
           var nameEl = wrap.querySelector('[data-role="dh-rv-name"]');
           if(nameEl && !nameEl.value){ nameEl.value = (u.displayName || '').trim().slice(0, 60); }
@@ -259,53 +254,24 @@
         });
       }
 
+      function showMsg(cls, text){
+        msgEl.className = 'dh-rv-msg ' + cls;
+        msgEl.textContent = text;
+        msgEl.style.display = 'block';
+      }
+
       var submitBtn = wrap.querySelector('[data-role="dh-rv-submit"]');
-      submitBtn.addEventListener('click', function(){
-        var btn = this;
-        var msgEl = wrap.querySelector('[data-role="dh-rv-msg"]');
-        var name = wrap.querySelector('[data-role="dh-rv-name"]').value.trim();
-        var text = wrap.querySelector('[data-role="dh-rv-text"]').value.trim();
-        msgEl.style.display = 'none';
 
-        var user = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
-        if(!user){
-          msgEl.className = 'dh-rv-msg err';
-          msgEl.textContent = 'Please sign in with Google to submit a review.';
-          msgEl.style.display = 'block';
-          return;
-        }
+      function resetBtn(){
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Submit Review';
+      }
 
-        if(!name || !text || selectedRating === 0){
-          msgEl.className = 'dh-rv-msg err';
-          msgEl.textContent = 'Please add your name, a rating, and a review.';
-          msgEl.style.display = 'block';
-          return;
-        }
-
-        // Spam trap filled -> pretend success, save nothing
-        if(hp.value){
-          msgEl.className = 'dh-rv-msg ok';
-          msgEl.textContent = 'Thank you! Your review has been posted.';
-          msgEl.style.display = 'block';
-          return;
-        }
-
-        // 30 second wait between reviews from the same browser
-        try {
-          var last = parseInt(localStorage.getItem('dh_rv_last') || '0', 10);
-          if(Date.now() - last < 30000){
-            msgEl.className = 'dh-rv-msg err';
-            msgEl.textContent = 'Please wait a few seconds before sending another review.';
-            msgEl.style.display = 'block';
-            return;
-          }
-        } catch(e) {}
-
-        btn.disabled = true;
-        btn.textContent = 'Submitting...';
+      // Saves the review for a signed-in user (one review per user per product)
+      function sendReview(user, name, text){
+        submitBtn.textContent = 'Submitting...';
 
         function saveReview(imageUrl, photoFailed){
-          // One review per customer per product (document id = uid_postId)
           dhDB.collection('reviews').doc(user.uid + '_' + postId).set({
             postId: postId,
             productName: productName,
@@ -320,11 +286,9 @@
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           }).then(function(){
             try { localStorage.setItem('dh_rv_last', String(Date.now())); } catch(e) {}
-            msgEl.className = 'dh-rv-msg ok';
-            msgEl.textContent = photoFailed
+            showMsg('ok', photoFailed
               ? 'Your review has been posted, but the photo could not be uploaded.'
-              : 'Thank you! Your review has been posted.';
-            msgEl.style.display = 'block';
+              : 'Thank you! Your review has been posted.');
             wrap.querySelector('[data-role="dh-rv-text"]').value = '';
             photoPreview.style.display = 'none';
             photoInput.value = '';
@@ -333,26 +297,79 @@
             starsInput.forEach(function(s2){ s2.classList.remove('active'); });
             loadReviews();
           }).catch(function(err){
-            msgEl.className = 'dh-rv-msg err';
-            msgEl.textContent = (err && err.code === 'permission-denied')
+            showMsg('err', (err && err.code === 'permission-denied')
               ? 'You have already reviewed this product. Only one review per product is allowed.'
-              : 'Something went wrong. Please try again.';
-            msgEl.style.display = 'block';
-          }).finally(function(){
-            btn.disabled = false;
-            btn.textContent = 'Submit Review';
-          });
+              : 'Something went wrong. Please try again.');
+          }).finally(resetBtn);
         }
 
         if(selectedFile){
-          btn.textContent = 'Uploading photo...';
+          submitBtn.textContent = 'Uploading photo...';
           uploadToCloudinary(selectedFile, function(url){
-            btn.textContent = 'Submitting...';
+            submitBtn.textContent = 'Submitting...';
             saveReview(url, !url);
           });
         } else {
           saveReview(null);
         }
+      }
+
+      submitBtn.addEventListener('click', function(){
+        var name = wrap.querySelector('[data-role="dh-rv-name"]').value.trim();
+        var text = wrap.querySelector('[data-role="dh-rv-text"]').value.trim();
+        msgEl.style.display = 'none';
+
+        if(!name || !text || selectedRating === 0){
+          showMsg('err', 'Please add your name, a rating, and a review.');
+          return;
+        }
+
+        // Spam trap filled -> pretend success, save nothing
+        if(hp.value){
+          showMsg('ok', 'Thank you! Your review has been posted.');
+          return;
+        }
+
+        // 30 second wait between reviews from the same browser
+        try {
+          var last = parseInt(localStorage.getItem('dh_rv_last') || '0', 10);
+          if(Date.now() - last < 30000){
+            showMsg('err', 'Please wait a few seconds before sending another review.');
+            return;
+          }
+        } catch(e) {}
+
+        if(typeof firebase === 'undefined' || !firebase.auth){
+          showMsg('err', 'Sign-in is not available right now. Please try again later.');
+          return;
+        }
+
+        submitBtn.disabled = true;
+
+        // Already signed in: post right away
+        if(currentUser){
+          sendReview(currentUser, name, text);
+          return;
+        }
+
+        // Not signed in: open the Google sign-in popup now (must run inside this click),
+        // keep everything the customer typed, then post the review after sign-in.
+        submitBtn.textContent = 'Signing in...';
+        firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()).then(function(res){
+          sendReview(res.user, name, text);
+        }).catch(function(e){
+          var code = e && e.code;
+          if(code === 'auth/popup-blocked'){
+            showMsg('err', 'Your browser blocked the sign-in window. Please allow pop-ups for this site and click Submit again.');
+          } else if(code === 'auth/popup-closed-by-user' || code === 'auth/cancelled-popup-request'){
+            showMsg('err', 'Sign-in was cancelled, so your review was not submitted. Click Submit to try again.');
+          } else if(code === 'auth/unauthorized-domain'){
+            showMsg('err', 'Sign-in is not set up for this domain yet.');
+          } else {
+            showMsg('err', 'Sign-in failed. Please try again.');
+          }
+          resetBtn();
+        });
       });
 
       loadReviews();
