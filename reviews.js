@@ -85,6 +85,34 @@
       var formBox = wrap.querySelector('.dh-rv-form');
       if(formBox){ formBox.appendChild(hp); }
 
+      // ---- Sign-in gate: only signed-in customers can write a review ----
+      var gate = document.createElement('div');
+      gate.style.cssText = 'display:none;text-align:center;padding:22px 16px;border:1px dashed #cbd5e1;border-radius:12px;margin-bottom:24px;background:#fff';
+      gate.innerHTML =
+        '<p style="margin:0 0 12px;color:#334155;font-size:.95rem">Please sign in with Google to write a review.</p>' +
+        '<button type="button" data-role="dh-rv-signin" style="background:#6d59ff;color:#fff;border:0;border-radius:8px;padding:10px 22px;font-weight:600;cursor:pointer;font-size:.95rem">Sign in with Google</button>';
+      if(formBox && formBox.parentNode){ formBox.parentNode.insertBefore(gate, formBox); }
+      gate.querySelector('[data-role="dh-rv-signin"]').addEventListener('click', function(){
+        if(window.dhSignIn){ window.dhSignIn(); }
+        else if(typeof firebase !== 'undefined' && firebase.auth){
+          firebase.auth().signInWithPopup(new firebase.auth.GoogleAuthProvider()).catch(function(){});
+        }
+      });
+
+      function applyAuth(u){
+        if(formBox){ formBox.style.display = u ? '' : 'none'; }
+        gate.style.display = u ? 'none' : 'block';
+        if(u){
+          var nameEl = wrap.querySelector('[data-role="dh-rv-name"]');
+          if(nameEl && !nameEl.value){ nameEl.value = (u.displayName || '').trim().slice(0, 60); }
+        }
+      }
+      if(typeof firebase !== 'undefined' && firebase.auth){
+        firebase.auth().onAuthStateChanged(applyAuth);
+      } else {
+        applyAuth(null);
+      }
+
       var photoInput = wrap.querySelector('[data-role="dh-rv-photo"]');
       var photoPreview = wrap.querySelector('[data-role="dh-rv-photo-preview"]');
       photoInput.addEventListener('change', function(){
@@ -238,6 +266,15 @@
         var name = wrap.querySelector('[data-role="dh-rv-name"]').value.trim();
         var text = wrap.querySelector('[data-role="dh-rv-text"]').value.trim();
         msgEl.style.display = 'none';
+
+        var user = (typeof firebase !== 'undefined' && firebase.auth) ? firebase.auth().currentUser : null;
+        if(!user){
+          msgEl.className = 'dh-rv-msg err';
+          msgEl.textContent = 'Please sign in with Google to submit a review.';
+          msgEl.style.display = 'block';
+          return;
+        }
+
         if(!name || !text || selectedRating === 0){
           msgEl.className = 'dh-rv-msg err';
           msgEl.textContent = 'Please add your name, a rating, and a review.';
@@ -268,7 +305,8 @@
         btn.textContent = 'Submitting...';
 
         function saveReview(imageUrl, photoFailed){
-          dhDB.collection('reviews').add({
+          // One review per customer per product (document id = uid_postId)
+          dhDB.collection('reviews').doc(user.uid + '_' + postId).set({
             postId: postId,
             productName: productName,
             productUrl: productUrl,
@@ -278,6 +316,7 @@
             imageUrl: imageUrl || null,
             status: 'approved',
             reply: '',
+            uid: user.uid,
             timestamp: firebase.firestore.FieldValue.serverTimestamp()
           }).then(function(){
             try { localStorage.setItem('dh_rv_last', String(Date.now())); } catch(e) {}
@@ -286,7 +325,6 @@
               ? 'Your review has been posted, but the photo could not be uploaded.'
               : 'Thank you! Your review has been posted.';
             msgEl.style.display = 'block';
-            wrap.querySelector('[data-role="dh-rv-name"]').value = '';
             wrap.querySelector('[data-role="dh-rv-text"]').value = '';
             photoPreview.style.display = 'none';
             photoInput.value = '';
@@ -294,9 +332,11 @@
             selectedRating = 0;
             starsInput.forEach(function(s2){ s2.classList.remove('active'); });
             loadReviews();
-          }).catch(function(){
+          }).catch(function(err){
             msgEl.className = 'dh-rv-msg err';
-            msgEl.textContent = 'Something went wrong. Please try again.';
+            msgEl.textContent = (err && err.code === 'permission-denied')
+              ? 'You have already reviewed this product. Only one review per product is allowed.'
+              : 'Something went wrong. Please try again.';
             msgEl.style.display = 'block';
           }).finally(function(){
             btn.disabled = false;
