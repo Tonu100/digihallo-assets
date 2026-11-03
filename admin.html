@@ -237,16 +237,23 @@ function cardHtml(it){
   var photo = d.imageUrl && d.imageUrl.indexOf('https://res.cloudinary.com/') === 0
     ? '<a href="' + esc(d.imageUrl) + '" target="_blank" rel="noopener"><img class="photo" src="' + esc(d.imageUrl.replace('/upload/', '/upload/w_300,q_auto,f_auto/')) + '" alt="photo"></a>' : '';
   var replyVal = drafts[it.id] != null ? drafts[it.id] : (d.reply || '');
+  var saved = (d.reply || '').trim();
+  var savedBox = saved
+    ? '<div style="margin:10px 0;padding:10px 12px;border-left:3px solid #6d59ff;border-radius:6px;background:rgba(109,89,255,.08)">' +
+        '<div class="meta"><b>Your reply</b>' + (d.repliedAt ? ' &middot; ' + esc(dateStr(d.repliedAt)) : '') + '</div>' +
+        '<div class="text" style="margin:4px 0 0">' + esc(saved) + '</div></div>'
+    : '<div class="meta" style="margin-top:6px">No reply yet</div>';
   return '<div class="card" data-card="' + esc(it.id) + '">' +
     '<div class="top"><div class="product">' +
       (url ? '<a href="' + esc(url) + '" target="_blank" rel="noopener">' + esc(name) + '</a>' : esc(name)) +
-      '<span class="badge ' + esc(st) + '">' + esc(st) + '</span></div>' +
+      '<span class="badge ' + esc(st) + '">' + esc(st) + '</span>' +
+      (saved ? '<span class="badge approved">replied</span>' : '') + '</div>' +
       '<div class="meta">' + esc(dateStr(d.timestamp)) + '</div></div>' +
     '<div class="meta">' + esc(d.name) + ' &middot; <span class="stars">' + stars + '</span></div>' +
-    '<div class="text">' + esc(d.text) + '</div>' + photo +
+    '<div class="text">' + esc(d.text) + '</div>' + photo + savedBox +
     '<textarea maxlength="1000" data-reply="' + esc(it.id) + '" placeholder="Write your reply...">' + esc(replyVal) + '</textarea>' +
     '<div class="actions">' +
-      '<button class="primary" data-act="save" data-id="' + esc(it.id) + '">Save reply</button>' +
+      '<button class="primary" data-act="save" data-id="' + esc(it.id) + '">' + (saved ? 'Update reply' : 'Save reply') + '</button>' +
       (st !== 'approved' ? '<button class="good" data-act="approved" data-id="' + esc(it.id) + '">Approve</button>' : '') +
       (st !== 'hidden' ? '<button class="warn" data-act="hidden" data-id="' + esc(it.id) + '">Hide</button>' : '') +
       '<button class="danger" data-act="delete" data-id="' + esc(it.id) + '">Delete</button>' +
